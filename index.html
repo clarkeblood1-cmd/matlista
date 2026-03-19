@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Matlista</title>
+<title>Matlist</title>
 <style>
 :root {
   --bg1: #07122a;
@@ -96,6 +96,7 @@ input, select, button {
 input, select {
   background: #f8fafc;
   color: #111827;
+  width: 100%;
 }
 
 button {
@@ -311,7 +312,8 @@ button:hover {
   display: none;
 }
 
-#imageModal {
+#imageModal,
+#editModal {
   display: none;
   position: fixed;
   inset: 0;
@@ -328,17 +330,6 @@ button:hover {
   background: #fff;
   border-radius: 18px;
   padding: 10px;
-}
-
-#editModal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.88);
-  justify-content: center;
-  align-items: center;
-  z-index: 10000;
-  padding: 20px;
 }
 
 .modal-box {
@@ -386,7 +377,7 @@ button:hover {
 </style>
 </head>
 <body>
-<header>🛒 Min Matlista</header>
+<header>🛒 Matlist</header>
 
 <div class="page">
   <div class="summary-bar">
