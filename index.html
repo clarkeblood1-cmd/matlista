@@ -130,6 +130,7 @@ button:hover {
   align-items: center;
   gap: 12px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
 }
 
 .section-title {
@@ -310,7 +311,8 @@ button:hover {
   display: none;
 }
 
-#imageModal {
+#imageModal,
+#editModal {
   display: none;
   position: fixed;
   inset: 0;
@@ -327,17 +329,6 @@ button:hover {
   background: #fff;
   border-radius: 18px;
   padding: 10px;
-}
-
-#editModal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.88);
-  justify-content: center;
-  align-items: center;
-  z-index: 10000;
-  padding: 20px;
 }
 
 .modal-box {
@@ -762,19 +753,30 @@ function addQuickItem() {
 
   input.value = '';
   save();
-  renderQuickList();
+  render();
 }
 
 function removeQuickItem(index) {
   quickItems.splice(index, 1);
   save();
-  renderQuickList();
+  render();
 }
 
 function useQuickItem(index) {
   const item = quickItems[index];
   if (!item) return;
-  items.push({ ...item });
+
+  items.push({
+    name: item.name || '',
+    price: Number(item.price || 0),
+    quantity: Number(item.quantity || 1),
+    unit: item.unit || 'st',
+    category: item.category || 'MAT',
+    place: item.place || 'kyl',
+    type: item.type || 'home',
+    img: item.img || ''
+  });
+
   save();
   render();
 }
@@ -856,6 +858,24 @@ function moveItem(index) {
 }
 
 function removeItem(index) {
+  const removed = items[index];
+
+  if (removed && removed.name) {
+    const exists = quickItems.find(i => i.name === removed.name);
+    if (!exists) {
+      quickItems.push({
+        name: removed.name || '',
+        price: Number(removed.price || 0),
+        quantity: Number(removed.quantity || 1),
+        unit: removed.unit || 'st',
+        category: removed.category || 'MAT',
+        place: removed.place || 'kyl',
+        type: 'home',
+        img: removed.img || ''
+      });
+    }
+  }
+
   items.splice(index, 1);
   save();
   render();
