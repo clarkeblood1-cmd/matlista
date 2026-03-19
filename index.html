@@ -1,220 +1,93 @@
-<!DOCTYPE html>
-<html lang="sv">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Min Matlista</title>
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const logger = require("firebase-functions/logger");
+const vision = require("@google-cloud/vision");
 
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#07122a">
+const client = new vision.ImageAnnotatorClient();
 
-<style>
-body {
-  margin:0;
-  font-family:Arial;
-  background:#07122a;
-  color:white;
-}
-header {
-  padding:15px;
-  text-align:center;
-  font-size:22px;
-  background:#0005;
-}
-.page { padding:10px; }
+exports.detectProductName = onCall(
+  { region: "europe-west1", timeoutSeconds: 60, memory: "512MiB" },
+  async (request) => {
+    const auth = request.auth;
+    const imageBase64 = request.data?.imageBase64;
 
-input, select, button {
-  width:100%;
-  padding:10px;
-  margin:5px 0;
-  border-radius:10px;
-  border:none;
-}
-
-button {
-  background:#22c55e;
-  font-weight:bold;
-}
-
-.card {
-  background:#041030;
-  padding:10px;
-  border-radius:15px;
-  margin-bottom:10px;
-}
-
-img {
-  width:80px;
-  height:80px;
-  object-fit:contain;
-  background:white;
-  border-radius:10px;
-}
-</style>
-</head>
-
-<body>
-
-<header>🛒 Matlista AI</header>
-
-<div class="page">
-
-<!-- LOGIN -->
-<div style="margin-bottom:10px;">
-  <button onclick="loginGoogle()">🔐 Logga in</button>
-  <div id="loginStatus">Inte inloggad</div>
-</div>
-
-<!-- INPUT -->
-<input id="itemName" placeholder="Vara">
-<input id="itemPrice" type="number" placeholder="Pris">
-<input id="itemQuantity" type="number" placeholder="Antal">
-
-<select id="itemUnit">
-  <option value="st">st</option>
-  <option value="g">g</option>
-  <option value="kg">kg</option>
-</select>
-
-<input type="file" id="itemImage" accept="image/*" capture="environment">
-<button onclick="addItem()">➕ Lägg till</button>
-
-<!-- LISTA -->
-<div id="list"></div>
-
-</div>
-
-<script>
-let items = JSON.parse(localStorage.getItem('matlista')) || [];
-let tempImage = null;
-
-function save(){
-  localStorage.setItem('matlista', JSON.stringify(items));
-}
-
-function render(){
-  const list = document.getElementById('list');
-  list.innerHTML = '';
-
-  items.forEach((item,i)=>{
-    const div = document.createElement('div');
-    div.className='card';
-
-    div.innerHTML = `
-      <img src="${item.img || ''}">
-      <div>${item.name}</div>
-      <div>${item.quantity} ${item.unit}</div>
-      <button onclick="removeItem(${i})">🗑️</button>
-    `;
-
-    list.appendChild(div);
-  });
-}
-
-function addItem(){
-  const name = itemName.value.trim();
-  if(!name) return;
-
-  items.push({
-    name,
-    price:Number(itemPrice.value||0),
-    quantity:Number(itemQuantity.value||0),
-    unit:itemUnit.value,
-    img:tempImage
-  });
-
-  tempImage=null;
-  save();
-  render();
-
-  itemName.value='';
-  itemPrice.value='';
-  itemQuantity.value='';
-}
-
-function removeItem(i){
-  items.splice(i,1);
-  save();
-  render();
-}
-
-function resizeImage(file, cb){
-  const reader = new FileReader();
-  reader.onload=e=>{
-    cb(e.target.result);
-  };
-  reader.readAsDataURL(file);
-}
-
-/* 📸 AI + bild */
-itemImage.addEventListener('change', function(e){
-  const file = e.target.files[0];
-  if(!file) return;
-
-  resizeImage(file, async (dataUrl)=>{
-    tempImage = dataUrl;
-
-    try{
-      const res = await detectAI(dataUrl.split(",")[1]);
-      if(res?.suggestion){
-        itemName.value = res.suggestion;
-      } else {
-        itemName.value = "Ny vara";
-      }
-    }catch(e){
-      itemName.value = "Ny vara";
+    if (!auth) {
+      throw new HttpsError("unauthenticated", "Du måste vara inloggad.");
     }
-  });
-});
 
-render();
-</script>
+    if (!imageBase64 || typeof imageBase64 !== "string") {
+      throw new HttpsError("invalid-argument", "Ingen bild skickades med.");
+    }
 
-<!-- 🔥 FIREBASE + AI -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-functions.js";
+    try {
+      const [labelResult] = await client.labelDetection({
+        image: { content: imageBase64 },
+      });
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBt_-N8daItzu5JLMSOijx-a0QdXU3kDcG",
-  authDomain: "matlist-app.firebaseapp.com",
-  projectId: "matlist-app",
-  storageBucket: "matlist-app.firebasestorage.app",
-  messagingSenderId: "149796994583",
-  appId: "1:149796994583:web:41113da82fa00001846652",
-  measurementId: "G-W31SM71VQ6"
-};
+      const [textResult] = await client.textDetection({
+        image: { content: imageBase64 },
+      });
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const functions = getFunctions(app);
+      const labels = (labelResult.labelAnnotations || []).map((l) => l.description);
+      const texts = (textResult.textAnnotations || []).map((t) => t.description);
 
-const provider = new GoogleAuthProvider();
+      const joinedText = texts.join(" ").toLowerCase();
+      const joinedLabels = labels.join(" ").toLowerCase();
 
-window.loginGoogle = async ()=>{
-  await signInWithPopup(auth, provider);
-};
+      let suggestion = "Ny vara";
+      let category = "MAT";
+      let place = "kyl";
+      let unit = "st";
 
-window.user=null;
+      if (joinedText.includes("mjölk") || joinedLabels.includes("milk")) {
+        suggestion = "Mjölk";
+        category = "MAT";
+        place = "kyl";
+        unit = "l";
+      } else if (
+        joinedText.includes("havre") ||
+        joinedText.includes("oat") ||
+        joinedText.includes("oddlygood")
+      ) {
+        suggestion = "Havredryck";
+        category = "MAT";
+        place = "kyl";
+        unit = "l";
+      } else if (joinedText.includes("cola") || joinedLabels.includes("soft drink")) {
+        suggestion = "Cola";
+        category = "GODIS";
+        place = "kyl";
+        unit = "st";
+      } else if (joinedText.includes("pasta") || joinedLabels.includes("pasta")) {
+        suggestion = "Pasta";
+        category = "MAT";
+        place = "köksskåp";
+        unit = "pkt";
+      } else if (
+        joinedText.includes("salt") ||
+        joinedText.includes("paprika") ||
+        joinedText.includes("krydda")
+      ) {
+        suggestion = "Krydda";
+        category = "KRYDDOR";
+        place = "kryddor";
+        unit = "g";
+      } else if (texts.length > 0) {
+        suggestion = texts[0].split("\n")[0].trim().slice(0, 40) || "Ny vara";
+      } else if (labels.length > 0) {
+        suggestion = labels[0];
+      }
 
-onAuthStateChanged(auth, user=>{
-  window.user=user;
-  document.getElementById("loginStatus").innerText =
-    user ? "Inloggad: "+user.displayName : "Inte inloggad";
-});
-
-window.detectAI = async (base64)=>{
-  if(!window.user){
-    alert("Logga in först!");
-    return null;
+      return {
+        suggestion,
+        category,
+        place,
+        unit,
+        labels,
+        texts,
+      };
+    } catch (error) {
+      logger.error("Vision error", error);
+      throw new HttpsError("internal", "AI-igenkänning misslyckades.");
+    }
   }
-
-  const call = httpsCallable(functions, "detectProductName");
-  const res = await call({imageBase64: base64});
-  return res.data;
-};
-</script>
-
-</body>
-</html>
+);
