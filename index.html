@@ -1006,5 +1006,49 @@ if ('serviceWorker' in navigator) {
 
 render();
 </script>
+  <script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-functions.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBt_-N8daItzu5JLMSOijx-a0QdXU3kDcG",
+  authDomain: "matlist-app.firebaseapp.com",
+  projectId: "matlist-app",
+  storageBucket: "matlist-app.firebasestorage.app",
+  messagingSenderId: "149796994583",
+  appId: "1:149796994583:web:41113da82fa00001846652",
+  measurementId: "G-W31SM71VQ6"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const functions = getFunctions(app);
+
+const provider = new GoogleAuthProvider();
+
+window.loginGoogle = async () => {
+  await signInWithPopup(auth, provider);
+};
+
+window.user = null;
+
+onAuthStateChanged(auth, (user) => {
+  window.user = user;
+  document.getElementById("loginStatus").innerText =
+    user ? "Inloggad: " + user.displayName : "Inte inloggad";
+});
+
+window.detectAI = async (base64) => {
+  if (!window.user) {
+    alert("Logga in först!");
+    return null;
+  }
+
+  const detect = httpsCallable(functions, "detectProductName");
+  const res = await detect({ imageBase64: base64 });
+  return res.data;
+};
+</script>
 </body>
 </html>
